@@ -1,4 +1,4 @@
-# ObjectDetection
+# PixelSight
 
 Real-time AI-powered hand gesture and facial expression detection with a stunning 3D visualization.
 
@@ -53,7 +53,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the application.
 ## 📁 Project Structure
 
 ```
-ObjectDetection/
+PixelSight/
 ├── backend/              # Django + Channels backend
 │   ├── base/             # Django project settings
 │   └── core/             # AI processing consumers
