@@ -1,0 +1,17 @@
+# CODEOWNERS - Defines code ownership for the ObjectDetection project
+# These owners will be automatically requested for review on PRs
+
+# Default owner for everything
+* @BigAddict
+
+# Backend (Django + AI)
+/backend/ @BigAddict
+
+# Frontend (Next.js + R3F)
+/frontend/ @BigAddict
+
+# AI Models
+/models/ @BigAddict
+
+# CI/CD and Repository Config
+/.github/ @BigAddict
