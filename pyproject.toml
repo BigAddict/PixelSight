@@ -5,11 +5,17 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "channels-redis>=4.3.0",
-    "channels[daphne]>=4.3.2",
-    "django>=6.0.1",
-    "mediapipe>=0.10.31",
+    "django>=5.0",
+    "daphne>=4.0",
+    "channels[daphne]>=4.0",
+    "channels-redis>=4.0",
+    "mediapipe>=0.10.0",
+    "opencv-python>=4.8.0",
+    "numpy>=1.24.0",
+    "django-cors-headers",
+    "Pillow",
+    "google-generativeai",
+    "google-genai>=1.58.0",
     "opencv-contrib-python>=4.12.0.88",
-    "opencv-python>=4.12.0.88",
     "twisted[http2,tls]>=25.5.0",
 ]
