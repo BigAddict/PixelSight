@@ -1,6 +1,6 @@
-# Contributing to ObjectDetection
+# Contributing to PixelSight
 
-Thank you for your interest in contributing to ObjectDetection! This guide will help you get started.
+Thank you for your interest in contributing to PixelSight! This guide will help you get started.
 
 ## Table of Contents
 - [Getting Started](#getting-started)
@@ -16,12 +16,12 @@ Thank you for your interest in contributing to ObjectDetection! This guide will 
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/ObjectDetection.git
-   cd ObjectDetection
+   git clone https://github.com/YOUR_USERNAME/PixelSight.git
+   cd PixelSight
    ```
 3. **Add the upstream remote**:
    ```bash
-   git remote add upstream https://github.com/BigAddict/ObjectDetection.git
+   git remote add upstream https://github.com/BigAddict/PixelSight.git
    ```
 
 ## Development Setup
@@ -56,7 +56,7 @@ The project requires MediaPipe model files in the `/models` directory:
 ## Project Structure
 
 ```
-ObjectDetection/
+PixelSight/
 ├── backend/              # Django + Channels backend
 │   ├── base/             # Django project settings
 │   └── core/             # AI processing consumers
