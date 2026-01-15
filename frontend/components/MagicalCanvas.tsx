@@ -1,28 +1,95 @@
 'use client';
 
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, Suspense } from 'react';
 import useWebSocket, { ReadyState } from 'react-use-websocket';
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Text, Float, Stars, Sparkles } from '@react-three/drei';
-import { EffectComposer, Bloom, ChromaticAberration } from '@react-three/postprocessing';
 import * as THREE from 'three';
-import { useDetectionStore } from '../store/DetectionStore';
+import { Canvas, useLoader } from '@react-three/fiber';
+import {
+    useGLTF,
+    OrbitControls,
+    Stars,
+    Sparkles,
+    Float,
+    Text
+} from '@react-three/drei';
+import { EffectComposer, Bloom, ChromaticAberration } from '@react-three/postprocessing';
+import { ARAsset, useDetectionStore } from '../store/DetectionStore';
 
-const WEBSOCKET_URL = 'ws://localhost:8000/ws/ai-stream/';
+// --- Constants & Types ---
+const WEBSOCKET_URL = 'ws://localhost:8000/ws/detection/';
 
-// --- Types ---
-type Landmark = { x: number; y: number; z: number };
-type AiData = {
-    gestures: { name: string; score: number }[];
-    expressions: string[];
-    hand_landmarks: Landmark[][];
-    face_landmarks: Landmark[][];
+interface Landmark {
+    x: number;
+    y: number;
+    z: number;
+}
+
+interface AiData {
+    hand_landmarks?: Landmark[][];
+    face_landmarks?: Landmark[][];
+    gestures?: Array<{ name: string; score: number }>;
+    expressions?: string[];
+}
+
+const mapLandmarkTo3D = (l: Landmark) => {
+    return new THREE.Vector3(
+        (l.x - 0.5) * -10,
+        (l.y - 0.5) * -8,
+        0
+    );
 };
+
+// --- Asset Renderer Component ---
+const AssetRenderer = React.memo(function AssetRenderer({
+    asset,
+    position,
+    rotation = new THREE.Euler(0, 0, 0),
+    scale = 1
+}: {
+    asset: ARAsset;
+    position: THREE.Vector3;
+    rotation?: THREE.Euler;
+    scale?: number;
+}) {
+    // 2D Sprite
+    if (asset.asset_type === '2D_IMAGE') {
+        const texture = useLoader(THREE.TextureLoader, asset.file_url);
+        return (
+            <sprite position={position} scale={[scale * 3, scale * 3, 1]} renderOrder={20}>
+                <spriteMaterial map={texture} transparent alphaTest={0.1} depthWrite={false} />
+            </sprite>
+        );
+    }
+
+    // 3D Model
+    if (asset.asset_type === '3D_MODEL') {
+        const { scene } = useGLTF(asset.file_url);
+        // Clone to allow multiple instances
+        const clone = useMemo(() => scene.clone(), [scene]);
+
+        return (
+            <primitive
+                object={clone}
+                position={position}
+                rotation={rotation}
+                scale={[scale * 2, scale * 2, scale * 2]}
+                renderOrder={20}
+            />
+        );
+    }
+
+    return null;
+});
 
 // --- 3D Components ---
 
-const HandVisualizer = React.memo(function HandVisualizer({ landmarks }: { landmarks: Landmark[] }) {
-    // MediaPipe Hands Connections (Simplified subset for visuals)
+const HandVisualizer = React.memo(function HandVisualizer({
+    landmarks,
+    asset
+}: {
+    landmarks: Landmark[];
+    asset?: ARAsset | null;
+}) {
     const connections = useMemo(() => [
         [0, 1], [1, 2], [2, 3], [3, 4],       // Thumb
         [0, 5], [5, 6], [6, 7], [7, 8],       // Index
@@ -31,15 +98,24 @@ const HandVisualizer = React.memo(function HandVisualizer({ landmarks }: { landm
         [0, 17], [17, 18], [18, 19], [19, 20] // Pinky
     ], []);
 
-    // Helper to map 0-1 coords to 3D space. 
-    // FLIP X to match mirror view. INVERT Y because screen coords are top-down.
-    // Reduced z-scale to keep hands in front of camera
-    const mapPos = useMemo(() => (l: Landmark) =>
-        new THREE.Vector3((l.x - 0.5) * -10, (l.y - 0.5) * -8, (l.z * -2) + 2), []);
+    const mapPos = useMemo(() => mapLandmarkTo3D, []);
+
+    // Determine Anchor Position
+    const anchorPos = useMemo(() => {
+        if (landmarks.length < 21) return null;
+
+        if (asset?.anchor === 'HAND_WRIST') return mapPos(landmarks[0]);
+        if (asset?.anchor === 'HAND_INDEX_TIP') return mapPos(landmarks[8]);
+
+        // Default to Palm Center
+        const wrist = mapPos(landmarks[0]);
+        const middleBase = mapPos(landmarks[9]);
+        return wrist.clone().add(middleBase).multiplyScalar(0.5);
+    }, [landmarks, mapPos, asset]);
 
     return (
         <group renderOrder={10}>
-            {/* Joints - Increased size for visibility */}
+            {/* Joints */}
             {landmarks.map((l, i) => (
                 <mesh key={i} position={mapPos(l)} renderOrder={11}>
                     <sphereGeometry args={[0.25, 12, 12]} />
@@ -53,7 +129,6 @@ const HandVisualizer = React.memo(function HandVisualizer({ landmarks }: { landm
                 const midPos = startPos.clone().add(endPos).multiplyScalar(0.5);
                 const length = startPos.distanceTo(endPos);
 
-                // Rotation logic using lookAt
                 const refObj = new THREE.Object3D();
                 refObj.position.copy(startPos);
                 refObj.lookAt(endPos);
@@ -65,12 +140,24 @@ const HandVisualizer = React.memo(function HandVisualizer({ landmarks }: { landm
                     </mesh>
                 )
             })}
+
+            {/* Asset Overlay */}
+            {asset && anchorPos && (
+                <Suspense fallback={null}>
+                    <AssetRenderer asset={asset} position={anchorPos} />
+                </Suspense>
+            )}
         </group>
     );
 });
 
-const FaceVisualizer = React.memo(function FaceVisualizer({ landmarks }: { landmarks: Landmark[] }) {
-    // Render a point cloud for the face
+const FaceVisualizer = React.memo(function FaceVisualizer({
+    landmarks,
+    asset
+}: {
+    landmarks: Landmark[];
+    asset?: ARAsset | null;
+}) {
     const points = useMemo(() => {
         const float32 = new Float32Array(landmarks.length * 3);
         landmarks.forEach((l, i) => {
@@ -81,26 +168,43 @@ const FaceVisualizer = React.memo(function FaceVisualizer({ landmarks }: { landm
         return float32;
     }, [landmarks]);
 
+    // Calculate face center (nose tip)
+    const faceCenter = useMemo(() => {
+        if (landmarks.length < 5) return null;
+        return mapLandmarkTo3D(landmarks[1]);
+    }, [landmarks]);
+
     return (
-        <points>
-            <bufferGeometry>
-                <bufferAttribute
-                    attach="attributes-position"
-                    count={points.length / 3}
-                    array={points}
-                    itemSize={3}
-                    args={[points, 3]}
-                />
-            </bufferGeometry>
-            <pointsMaterial size={0.06} color="#c084fc" sizeAttenuation transparent opacity={0.8} />
-        </points>
+        <group>
+            <points>
+                <bufferGeometry>
+                    <bufferAttribute
+                        attach="attributes-position"
+                        count={points.length / 3}
+                        array={points}
+                        itemSize={3}
+                        args={[points, 3]}
+                    />
+                </bufferGeometry>
+                <pointsMaterial size={0.06} color="#c084fc" sizeAttenuation transparent opacity={0.8} />
+            </points>
+
+            {/* Asset overlay */}
+            {asset && faceCenter && (
+                <Suspense fallback={null}>
+                    <AssetRenderer asset={asset} position={faceCenter} />
+                </Suspense>
+            )}
+        </group>
     );
 });
 
 function Scene({ aiData }: { aiData: AiData | null }) {
+    const { selectedFaceAsset, selectedHandAsset } = useDetectionStore();
+
     return (
         <>
-            <ambientLight intensity={0.2} />
+            <ambientLight intensity={0.5} />
             <pointLight position={[10, 10, 10]} intensity={1} color="#06b6d4" />
             <pointLight position={[-10, -10, -10]} intensity={0.5} color="#c084fc" />
 
@@ -109,12 +213,12 @@ function Scene({ aiData }: { aiData: AiData | null }) {
 
             {/* Hands */}
             {aiData?.hand_landmarks?.map((hand, i) => (
-                <HandVisualizer key={`hand-${i}`} landmarks={hand} />
+                <HandVisualizer key={`hand-${i}`} landmarks={hand} asset={selectedHandAsset} />
             ))}
 
             {/* Face */}
             {aiData?.face_landmarks?.map((face, i) => (
-                <FaceVisualizer key={`face-${i}`} landmarks={face} />
+                <FaceVisualizer key={`face-${i}`} landmarks={face} asset={selectedFaceAsset} />
             ))}
 
             {/* Text Overlay in 3D */}
@@ -125,7 +229,7 @@ function Scene({ aiData }: { aiData: AiData | null }) {
                 </Text>
 
                 {aiData?.gestures?.[0] && (
-                    <Text position={[0, 3, 0]} fontSize={0.6} font="/fonts/Inter-Bold.woff" anchorX="center" anchorY="middle">
+                    <Text position={[0, 3, 0]} fontSize={0.6} anchorX="center" anchorY="middle">
                         {aiData.gestures[0].name.toUpperCase()}
                         <meshStandardMaterial color="#00ffff" emissive="#00ffff" emissiveIntensity={2} />
                     </Text>
