@@ -35,7 +35,7 @@ export default function AssetManager() {
         fetchAssets().then(setAssets);
     }, [setAssets]);
 
-    const handleFileSelect = async (file: File) => {
+    const handleFileSelect = useCallback(async (file: File) => {
         // Accept images and 3D models
         const isImage = file.type.startsWith('image/');
         const isModel = file.name.endsWith('.glb') || file.name.endsWith('.gltf');
@@ -55,7 +55,7 @@ export default function AssetManager() {
             setAssets([newAsset, ...availableAssets]);
         }
         setIsUploading(false);
-    };
+    }, [activeAnchor, availableAssets, setAssets]);
 
     const handleGenerate = async () => {
         if (!prompt.trim()) return;
@@ -78,7 +78,7 @@ export default function AssetManager() {
         setDragOver(false);
         const file = e.dataTransfer.files[0];
         if (file) handleFileSelect(file);
-    }, [activeAnchor, availableAssets]);
+    }, [handleFileSelect]);
 
     const handleDelete = async (asset: ARAsset) => {
         if (await deleteAsset(asset.id)) {

@@ -40,6 +40,48 @@ const mapLandmarkTo3D = (l: Landmark) => {
 };
 
 // --- Asset Renderer Component ---
+const ImageAssetRenderer = React.memo(function ImageAssetRenderer({
+    url,
+    position,
+    scale
+}: {
+    url: string;
+    position: THREE.Vector3;
+    scale: number;
+}) {
+    const texture = useLoader(THREE.TextureLoader, url);
+    return (
+        <sprite position={position} scale={[scale * 3, scale * 3, 1]} renderOrder={20}>
+            <spriteMaterial map={texture} transparent alphaTest={0.1} depthWrite={false} />
+        </sprite>
+    );
+});
+
+const ModelAssetRenderer = React.memo(function ModelAssetRenderer({
+    url,
+    position,
+    rotation,
+    scale
+}: {
+    url: string;
+    position: THREE.Vector3;
+    rotation: THREE.Euler;
+    scale: number;
+}) {
+    const { scene } = useGLTF(url);
+    const clone = useMemo(() => scene.clone(), [scene]);
+
+    return (
+        <primitive
+            object={clone}
+            position={position}
+            rotation={rotation}
+            scale={[scale * 2, scale * 2, scale * 2]}
+            renderOrder={20}
+        />
+    );
+});
+
 const AssetRenderer = React.memo(function AssetRenderer({
     asset,
     position,
@@ -51,31 +93,12 @@ const AssetRenderer = React.memo(function AssetRenderer({
     rotation?: THREE.Euler;
     scale?: number;
 }) {
-    // 2D Sprite
     if (asset.asset_type === '2D_IMAGE') {
-        const texture = useLoader(THREE.TextureLoader, asset.file_url);
-        return (
-            <sprite position={position} scale={[scale * 3, scale * 3, 1]} renderOrder={20}>
-                <spriteMaterial map={texture} transparent alphaTest={0.1} depthWrite={false} />
-            </sprite>
-        );
+        return <ImageAssetRenderer url={asset.file_url} position={position} scale={scale} />;
     }
 
-    // 3D Model
     if (asset.asset_type === '3D_MODEL') {
-        const { scene } = useGLTF(asset.file_url);
-        // Clone to allow multiple instances
-        const clone = useMemo(() => scene.clone(), [scene]);
-
-        return (
-            <primitive
-                object={clone}
-                position={position}
-                rotation={rotation}
-                scale={[scale * 2, scale * 2, scale * 2]}
-                renderOrder={20}
-            />
-        );
+        return <ModelAssetRenderer url={asset.file_url} position={position} rotation={rotation} scale={scale} />;
     }
 
     return null;
